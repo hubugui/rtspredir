@@ -12,37 +12,15 @@ import (
     "errors"
     "fmt"
     "net"
-    "os"
+    "time"
     "strings"
 )
 
 const (
+    CONN_TYPE = "tcp"
     CONN_HOST = "0.0.0.0"
     CONN_PORT = "554"
-    CONN_TYPE = "tcp"
 )
-
-func main() {
-    l, err := net.Listen("tcp4", ":" + CONN_PORT)
-    if err != nil {
-        fmt.Println("Error listening:", err.Error())
-        os.Exit(1)
-    }
-    // Close the listener when the application closes.
-    defer l.Close()
-
-    fmt.Println("Listening on " + CONN_HOST + ":" + CONN_PORT)
-
-    for {
-        conn, err := l.Accept()
-        if err != nil {
-            fmt.Println("Error accepting: ", err.Error())
-            break
-        }
-
-        go handleRequest(conn)
-    }
-}
 
 func parseRequestFirstLine(line string) (string, string, string, error) {
     metas := strings.SplitN(line, " ", 3)
@@ -61,8 +39,9 @@ func parseRequestFirstLine(line string) (string, string, string, error) {
     return "", "", "", errors.New("first line content wrong")
 }
 
-func handleRequest(conn net.Conn) {
-	fmt.Print("Serving %s connected\n", conn.RemoteAddr().String())
+func on_new_client(conn net.Conn) {
+    fmt.Printf("%s connected\n", conn.RemoteAddr().String())
+
     for {
         netData, err := bufio.NewReader(conn).ReadString('\n')
         if err != nil {
@@ -76,7 +55,7 @@ func handleRequest(conn net.Conn) {
             fmt.Println(err)
             continue
         }
-        fmt.Print("%s, %s, %s\n", method, media, version)
+        fmt.Printf("method:%s, %s, %s\n", method, media, version)
 
         switch method {
         case "DESCRIBE":
@@ -92,12 +71,50 @@ func handleRequest(conn net.Conn) {
         case "EXIT":
             break
         default:
-            fmt.Print("unknown method: %s.\n", method)
+            fmt.Printf("unknown method: %s.\n", method)
         }
 
         result := "bye\n"
         conn.Write([]byte(string(result)))
     }
+    fmt.Printf("Serving %s closed\n", conn.RemoteAddr().String())
     conn.Close()
-    fmt.Print("Serving %s closed\n", conn.RemoteAddr().String())
+}
+
+func launch_server(protocol string, host string, port string, user string, pwd string) int {
+    switch protocol {
+    case "tcp", "tcp4", "tcp6":
+    default:
+    return -1
+    }
+
+    tcp_server, err := net.Listen(protocol, ":" + port)
+    if err != nil {
+        fmt.Println("error listening:", err.Error())
+        return -2
+    }
+    defer tcp_server.Close()
+    fmt.Printf("listening on %s://%s:%s\n", protocol, host, port)
+
+    for {
+        conn, err := tcp_server.Accept()
+        if err != nil {
+            fmt.Println("error accepting: ", err.Error())
+            break
+        }
+
+        go on_new_client(conn)
+    }
+
+    return -3
+}
+
+func main() {
+    ret := launch_server(CONN_TYPE, CONN_HOST, CONN_PORT, "", "")
+
+    if ret == 0 {
+        for {
+            time.Sleep(time.Duration(2) * time.Second)
+        }
+    }
 }
