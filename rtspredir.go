@@ -9,11 +9,11 @@ package main
 
 import (
     "bufio"
+    "bytes"
     "errors"
     "fmt"
     "net"
     "time"
-    "strings"
 )
 
 const (
@@ -22,42 +22,50 @@ const (
     CONN_PORT = "554"
 )
 
-func parseRequestFirstLine(line string) (string, string, string, error) {
-    metas := strings.SplitN(line, " ", 3)
-    if len(metas) == 3 {
-        method := metas[0]
-        media := metas[1]
-        versions := strings.SplitN(metas[2], "/", 2)
+func read_request_message(conn net.Conn) (string, error) {
+    var buffer bytes.Buffer
 
-        if len(versions) == 2 {
-            version := versions[1]
-            return method, media, version, nil
-        } else {
-            return "", "", "", errors.New("version haven't '/'")
-        }
-    }
-    return "", "", "", errors.New("first line content wrong")
-}
-
-func on_new_client(conn net.Conn) {
-    fmt.Printf("%s connected\n", conn.RemoteAddr().String())
+    reader := bufio.NewReader(conn)
 
     for {
-        netData, err := bufio.NewReader(conn).ReadString('\n')
+        data, err := reader.ReadBytes('\n')
+        if err != nil {
+            fmt.Println(err)
+            return "", errors.New("read fail")
+        }
+        data = bytes.TrimRight(data, "\r\n")
+        line := string(data[:])
+        fmt.Println(line)
+
+        if len(line) == 0 {
+            break
+        }
+        buffer.WriteString(line + "\r\n")
+    }
+
+    return buffer.String(), nil
+}
+
+func on_rtsp_client(conn net.Conn) {
+    defer conn.Close()
+
+    fmt.Printf("welcome new client: %s\n", conn.RemoteAddr().String())
+
+    for {
+        message, err := read_request_message(conn)
         if err != nil {
             fmt.Println(err)
             break
         }
 
-        request := strings.TrimSpace(string(netData))
-        method, media, version, err := parseRequestFirstLine(request)
+        req, err := parse_request(message)
         if err != nil {
             fmt.Println(err)
-            continue
+            break
         }
-        fmt.Printf("method:%s, %s, %s\n", method, media, version)
 
-        switch method {
+        fmt.Printf("method:%s, URI:%s, Version:%s, cseq:%s\n", req.method, req.media, req.version, req.cseq)
+        switch req.method {
         case "DESCRIBE":
         case "ANNOUNCE":
         case "GET_PARAMETER":
@@ -71,14 +79,15 @@ func on_new_client(conn net.Conn) {
         case "EXIT":
             break
         default:
-            fmt.Printf("unknown method: %s.\n", method)
+            fmt.Printf("unknown method: %s.\n", req.method)
+            break
         }
 
-        result := "bye\n"
-        conn.Write([]byte(string(result)))
+        // result := "bye\n"
+        // conn.Write([]byte(string(result)))
     }
-    fmt.Printf("Serving %s closed\n", conn.RemoteAddr().String())
-    conn.Close()
+
+    fmt.Printf("client %s closed\n", conn.RemoteAddr().String())
 }
 
 func launch_server(protocol string, host string, port string, user string, pwd string) int {
@@ -103,7 +112,7 @@ func launch_server(protocol string, host string, port string, user string, pwd s
             break
         }
 
-        go on_new_client(conn)
+        go on_rtsp_client(conn)
     }
 
     return -3
