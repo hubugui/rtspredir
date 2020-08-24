@@ -8,8 +8,10 @@ package main
 // https://tour.golang.org/flowcontrol/1
 
 import (
+    "bytes"
     "errors"
     "fmt"
+    "time"
     "strings"
 )
 
@@ -60,6 +62,19 @@ type request struct {
     // message_body
 }
 
+func now_rtsp_time() (string) {
+    cst_shanghai, err := time.LoadLocation("Asia/Shanghai")
+    if err != nil {
+            fmt.Println(err)
+        return ""
+    }
+
+    t := time.Now().In(cst_shanghai)
+    wd := t.Weekday()
+    dt := fmt.Sprintf("%s, %s %02d %04d %02d:%02d:%02d GMT", wd.String()[:3], t.Month().String()[:3], t.Day(), t.Year(), t.Hour(), t.Minute(), t.Second())
+    return dt
+}
+
 func (req *request) init() {
     req.method = ""
     req.media = ""
@@ -104,7 +119,7 @@ func (req *request) parse_header(line string) (error) {
     return nil
 }
 
-func parse_request(message string) (request, error) {
+func parse_request_message(message string) (request, error) {
     req := request{}
     req.init()
 
@@ -131,8 +146,7 @@ func parse_request(message string) (request, error) {
 
             method, media, version, err := req.parse_request_line(lines[i])
             if err != nil {
-                fmt.Println(err)
-                return req, nil
+                return req, err
             }
             req.method = method
             req.media = media
@@ -141,4 +155,43 @@ func parse_request(message string) (request, error) {
     }
 
     return req, nil
+}
+
+func take_response(req request) (string, error) {
+    buffer := bytes.NewBufferString("")
+
+    switch req.method {
+        case "DESCRIBE":
+            buffer.WriteString("RTSP/1.0 401 Unauthorized\r\n")
+            buffer.WriteString("CSeq: " + req.cseq + "\r\n")
+            buffer.WriteString("WWW-Authenticate: Digest realm=\"1868cb28d70b\", nonce=\"183a9792656598515a3d4ea07ae2dde2\", stale=\"FALSE\"\r\n")
+            buffer.WriteString("WWW-Authenticate: Basic realm=\"1868cb28d70b\"\r\n")
+            buffer.WriteString("Date: " + now_rtsp_time() + "\r\n")
+            buffer.WriteString("\r\n")
+            break
+        case "ANNOUNCE":
+            break
+        case "GET_PARAMETER":
+            break
+        case "OPTIONS":
+            buffer.WriteString("RTSP/1.0 200 OK\r\n")
+            buffer.WriteString("CSeq: " + req.cseq + "\r\n")
+            buffer.WriteString("Public: OPTIONS, DESCRIBE, PLAY, PAUSE, SETUP, TEARDOWN, SET_PARAMETER, GET_PARAMETER\r\n")
+            buffer.WriteString("Date: " + now_rtsp_time() + "\r\n")
+            buffer.WriteString("\r\n")
+            break
+        case "PAUSE":
+        case "PLAY":
+        case "RECORD":
+        case "SETUP":
+        case "SET_PARAMETER":
+        case "TEARDOWN":
+        case "EXIT":
+            break
+        default:
+            fmt.Printf("unknown method: %s.\n", req.method)
+            break
+    }
+
+    return buffer.String(), nil
 }

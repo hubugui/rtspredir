@@ -22,6 +22,7 @@ const (
     CONN_PORT = "554"
 )
 
+// TODO: refactor CRLF split
 func read_request_message(conn net.Conn) (string, error) {
     var buffer bytes.Buffer
 
@@ -35,7 +36,6 @@ func read_request_message(conn net.Conn) (string, error) {
         }
         data = bytes.TrimRight(data, "\r\n")
         line := string(data[:])
-        fmt.Println(line)
 
         if len(line) == 0 {
             break
@@ -49,6 +49,9 @@ func read_request_message(conn net.Conn) (string, error) {
 func on_rtsp_client(conn net.Conn) {
     defer conn.Close()
 
+    req_idx := 1
+    res_idx := 1
+
     fmt.Printf("welcome new client: %s\n", conn.RemoteAddr().String())
 
     for {
@@ -58,33 +61,30 @@ func on_rtsp_client(conn net.Conn) {
             break
         }
 
-        req, err := parse_request(message)
+        req, err := parse_request_message(message)
         if err != nil {
             fmt.Println(err)
             break
         }
 
-        fmt.Printf("method:%s, URI:%s, Version:%s, cseq:%s\n", req.method, req.media, req.version, req.cseq)
-        switch req.method {
-        case "DESCRIBE":
-        case "ANNOUNCE":
-        case "GET_PARAMETER":
-        case "OPTIONS":
-        case "PAUSE":
-        case "PLAY":
-        case "RECORD":
-        case "SETUP":
-        case "SET_PARAMETER":
-        case "TEARDOWN":
-        case "EXIT":
-            break
-        default:
-            fmt.Printf("unknown method: %s.\n", req.method)
+        fmt.Printf("\n<<<<<<<<<<<<<<<<\n")
+        fmt.Printf("[%03d] request:\n%s", req_idx, message)
+        fmt.Printf("\n<<<<<<<<<<<<<<<<\n")
+
+        response, err := take_response(req)
+
+        fmt.Printf("\n>>>>>>>>>>>>>>>>\n")
+        fmt.Printf("[%03d] response:\n%s", res_idx, response)
+        fmt.Printf("\n>>>>>>>>>>>>>>>>\n")
+
+        conn.Write([]byte(string(response)))
+        if err != nil {
+            fmt.Println(err)
             break
         }
 
-        // result := "bye\n"
-        // conn.Write([]byte(string(result)))
+        req_idx++
+        res_idx++
     }
 
     fmt.Printf("client %s closed\n", conn.RemoteAddr().String())
