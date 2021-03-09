@@ -90,7 +90,7 @@ func on_rtsp_client(conn net.Conn) {
     fmt.Printf("client %s closed\n", conn.RemoteAddr().String())
 }
 
-func launch_server(protocol string, host string, port string, user string, pwd string) int {
+func launch(protocol string, host string, port string, user string, pwd string) int {
     switch protocol {
     case "tcp", "tcp4", "tcp6":
     default:
@@ -119,11 +119,13 @@ func launch_server(protocol string, host string, port string, user string, pwd s
 }
 
 func main() {
-    ret := launch_server(CONN_TYPE, CONN_HOST, CONN_PORT, "", "")
+    ret := launch(CONN_TYPE, CONN_HOST, CONN_PORT, "", "")
 
     if ret == 0 {
         for {
             time.Sleep(time.Duration(2) * time.Second)
         }
+    } else {
+        fmt.Println("launch failed : ", ret)
     }
 }

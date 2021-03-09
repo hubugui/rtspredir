@@ -13,6 +13,7 @@ import (
     "fmt"
     "time"
     "strings"
+    "strconv"
 )
 
 type request struct {  
@@ -159,9 +160,10 @@ func parse_request_message(message string) (request, error) {
 
 func take_response(req request) (string, error) {
     buffer := bytes.NewBufferString("")
+    body := bytes.NewBufferString("")
 
     switch req.method {
-        case "DESCRIBE":
+        case "DESCRIBE2":
             buffer.WriteString("RTSP/1.0 401 Unauthorized\r\n")
             buffer.WriteString("CSeq: " + req.cseq + "\r\n")
             buffer.WriteString("WWW-Authenticate: Digest realm=\"1868cb28d70b\", nonce=\"183a9792656598515a3d4ea07ae2dde2\", stale=\"FALSE\"\r\n")
@@ -169,8 +171,14 @@ func take_response(req request) (string, error) {
             buffer.WriteString("Date: " + now_rtsp_time() + "\r\n")
             buffer.WriteString("\r\n")
             break
+        case "DESCRIBE":
+            resp_format := "RTSP/1.0 301 OK\r\n" +
+                        "CSeq: %s\r\n" +
+                        "Location: rtsp://192.168.1.8:9554/live\r\n" +
+                        "\r\n"
+            buffer.WriteString(fmt.Sprintf(resp_format, req.cseq))
+            break            
         case "ANNOUNCE":
-            break
         case "GET_PARAMETER":
             break
         case "OPTIONS":
@@ -182,8 +190,15 @@ func take_response(req request) (string, error) {
             break
         case "PAUSE":
         case "PLAY":
+            buffer.WriteString("RTSP/1.0 301 OK\r\n")
+            buffer.WriteString("REDIRECT rtsp://192.168.1.8:554/live RTSP/1.0\r\n")
+            buffer.WriteString("CSeq: " + req.cseq + "\r\n")
+            buffer.WriteString("Location: rtsp://192.168.1.8:9554/live\r\n")
+            buffer.WriteString("\r\n")      
+            break
         case "RECORD":
         case "SETUP":
+            break
         case "SET_PARAMETER":
         case "TEARDOWN":
         case "EXIT":
